@@ -116,7 +116,7 @@ export default function LoginPage() {
               onClick={() => router.push("/signup")}
               className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-widest"
             >
-              Request Access
+              Create New Account
             </button>
           </div>
         </div>

@@ -78,7 +78,7 @@ export default function SignupPage() {
                 <input
                   required
                   type="text"
-                  placeholder="e.g. Jesvitha K."
+                  placeholder="e.g. Your Name"
                   className="w-full bg-slate-950/50 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-purple-500/50 transition-all"
                   onChange={(e) => setFullName(e.target.value)}
                 />
