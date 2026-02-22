@@ -147,7 +147,7 @@ export default function LearnPage() {
                       whileTap={{ scale: 0.98 }}
                       className={`h-full flex flex-col justify-between p-6 rounded-2xl border backdrop-blur-xl transition-all group ${
                         isCompleted 
-                          ? "bg-slate-900/30 border-emerald-500/30 hover:border-emerald-500/60" 
+                          ? "bg-slate-900/30 border-emerald-500/30 hover:border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.05)]" 
                           : "bg-slate-900/40 border-slate-800 hover:border-indigo-500/50 shadow-[0_0_20px_rgba(0,0,0,0.2)] hover:shadow-[0_0_25px_rgba(99,102,241,0.1)]"
                       }`}
                     >

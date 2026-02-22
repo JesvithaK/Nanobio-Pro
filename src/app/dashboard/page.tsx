@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 /**
- * STRICT INTERFACES
+ * REFINED INTERFACES
  */
 interface Profile {
   full_name: string;
@@ -39,6 +39,7 @@ interface RecentModule {
   modules: {
     title: string;
     slug: string;
+    difficulty: number;
   };
 }
 
@@ -56,52 +57,33 @@ export default function NanobioDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Fetch Real Profile
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("full_name, streak, xp, level")
-        .eq("id", user.id)
-        .single();
+      // 1. Fetch Profile and Module Telemetry in Parallel
+      const [profileRes, modulesRes, progressRes, recentRes] = await Promise.all([
+        supabase.from("profiles").select("full_name, streak, xp, level").eq("id", user.id).single(),
+        supabase.from("modules").select("*", { count: 'exact', head: true }),
+        supabase.from("module_progress").select("*", { count: 'exact', head: true }).eq("user_id", user.id).eq("completed", true),
+        supabase.from("module_progress").select("progress, modules(title, slug, difficulty)").eq("user_id", user.id).order("last_opened", { ascending: false }).limit(1).maybeSingle()
+      ]);
 
-      // 2. Fetch Module Counts
-      const { count: totalModules } = await supabase
-        .from("modules")
-        .select("*", { count: 'exact', head: true });
-
-      const { count: completedCount } = await supabase
-        .from("module_progress")
-        .select("*", { count: 'exact', head: true })
-        .eq("user_id", user.id)
-        .eq("completed", true);
-
-      // 3. Fetch Most Recent Active Module
-      const { data: recentData } = await supabase
-        .from("module_progress")
-        .select("progress, modules(title, slug)")
-        .eq("user_id", user.id)
-        .order("last_opened", { ascending: false })
-        .limit(1)
-        .maybeSingle(); // Prevents error if no progress exists yet
-
-      if (profileData) setProfile(profileData);
+      if (profileRes.data) setProfile(profileRes.data);
       setStats({ 
-        total: totalModules || 26, 
-        completed: completedCount || 0 
+        total: modulesRes.count || 26, 
+        completed: progressRes.count || 0 
       });
-      if (recentData) setRecent(recentData as unknown as RecentModule);
+      if (recentRes.data) setRecent(recentRes.data as unknown as RecentModule);
       
       setLoading(false);
-
-      // 4. Real-time Profile Listener
-      const channel = supabase.channel('dashboard-sync')
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, 
-        payload => setProfile(payload.new as Profile))
-        .subscribe();
-
-      return () => { supabase.removeChannel(channel); };
     };
 
     fetchDashboardData();
+
+    // 2. Real-time Profile Heartbeat
+    const channel = supabase.channel('dashboard-sync')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, 
+      payload => setProfile(payload.new as Profile))
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [supabase]);
 
   if (loading) return (
@@ -115,27 +97,29 @@ export default function NanobioDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 p-6 lg:p-12 selection:bg-indigo-500/30">
+      {/* AMBIENT BACKGROUND GRID */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-20 bg-size-[4rem_4rem] bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)]" />
 
       <main className="relative z-10 max-w-7xl mx-auto space-y-10">
         
+        {/* RESEARCHER IDENTITY HEADER */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={SPRING}>
             <div className="flex items-center gap-2 mb-2">
               <ShieldCheck className="w-4 h-4 text-indigo-500" />
-              <span className="text-[10px] font-mono text-indigo-400 uppercase tracking-[0.3em]">Researcher: {profile?.full_name || "Auth_Node_Error"}</span>
+              <span className="text-[10px] font-mono text-indigo-400 uppercase tracking-[0.3em]">Researcher: {profile?.full_name || "Guest_Access"}</span>
             </div>
             <h1 className="text-4xl font-bold text-white tracking-tight uppercase">Control Center</h1>
           </motion.div>
 
           <div className="flex gap-4">
-            <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl text-center min-w-25 group transition-all hover:border-orange-500/30">
-              <Flame className="w-5 h-5 text-orange-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+            <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl text-center min-w-[100px] transition-all hover:border-orange-500/30">
+              <Flame className="w-5 h-5 text-orange-500 mx-auto mb-1" />
               <p className="text-xl font-bold text-white font-mono">{profile?.streak || 0}</p>
               <p className="text-[9px] font-mono text-slate-600 uppercase">Streak</p>
             </div>
-            <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl text-center min-w-25 group transition-all hover:border-indigo-400/40">
-              <Star className="w-5 h-5 text-indigo-400 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+            <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl text-center min-w-[100px] transition-all hover:border-indigo-400/40">
+              <Star className="w-5 h-5 text-indigo-400 mx-auto mb-1" />
               <p className="text-xl font-bold text-indigo-400 font-mono">{profile?.xp || 0}</p>
               <p className="text-[9px] font-mono text-indigo-500/60 uppercase">Neural_XP</p>
             </div>
@@ -143,6 +127,7 @@ export default function NanobioDashboard() {
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* PRIMARY FOCUS NODE */}
           <div className="lg:col-span-8">
             <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={SPRING}>
               <div className="backdrop-blur-3xl bg-slate-900/40 border border-slate-800 rounded-3xl p-8 md:p-12 relative overflow-hidden group border-l-4 border-l-indigo-500">
@@ -157,7 +142,7 @@ export default function NanobioDashboard() {
                     </h2>
                     <div className="flex flex-wrap justify-center md:justify-start gap-6 text-slate-500 text-[10px] font-mono uppercase">
                       <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Est_Duration: 45m</span>
-                      <span className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> Tier: Advanced</span>
+                      <span className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> LVL_{recent?.modules.difficulty || 1}</span>
                     </div>
                   </div>
                   <Link href={recent ? `/learn/${recent.modules.slug}` : "/learn"}>
@@ -170,6 +155,7 @@ export default function NanobioDashboard() {
             </motion.div>
           </div>
 
+          {/* MASTERY OVERVIEW */}
           <div className="lg:col-span-4">
             <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-8 h-full flex flex-col justify-between">
               <div>
@@ -201,10 +187,11 @@ export default function NanobioDashboard() {
           </div>
         </div>
 
+        {/* DOMAIN NODES */}
         <div className="space-y-6 pt-6">
           <div className="flex items-center gap-3 border-b border-slate-900 pb-4">
-             <Binary className="w-5 h-5 text-indigo-400" />
-             <h2 className="text-xl font-bold text-white uppercase tracking-tight">Active Research Domains</h2>
+              <Binary className="w-5 h-5 text-indigo-400" />
+              <h2 className="text-xl font-bold text-white uppercase tracking-tight">Active Research Domains</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
